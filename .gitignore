@@ -1,0 +1,13 @@
+# local editor / tooling state
+.claude/
+.vercel/
+supabase/.temp/
+
+# working files, not part of the site
+*.zip
+assets/robotic-arm-reference*.jpg
+
+# OS noise
+Thumbs.db
+desktop.ini
+.DS_Store
