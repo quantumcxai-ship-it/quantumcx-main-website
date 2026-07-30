@@ -37,7 +37,12 @@ html{font-size:16px}
 @media (max-width:1920px){html{font-size:0.833333vw}}
 @media (max-width:1440px){html{font-size:1.111111vw}}
 @media (max-width:1024px){html{font-size:1.5625vw}}
-@media (max-width:640px){html{font-size:4.444444vw}}
+/* The mobile tier starts where the mobile *layout* starts (767px), not 640px —
+   those disagreeing left 641–767px rendering the phone layout at a desktop rem.
+   It is clamped because 4.444vw is sized for a ~375px phone: unclamped it
+   reached 28px at 640px and burst every fixed-width block. Phones at or below
+   414px are unaffected; the clamp only bites above them. */
+@media (max-width:767.98px){html{font-size:clamp(13px,4.444444vw,18px)}}
 
 /* --------------------------------------------------------------- tokens */
 :root{
@@ -222,14 +227,18 @@ body.menu-open #menuClose{opacity:1}
   background:var(--overlay-glass);border:1px solid var(--overlay-edge);color:var(--overlay-ink);
   -webkit-backdrop-filter:blur(var(--blur-overlay-glass));backdrop-filter:blur(var(--blur-overlay-glass));
 }
-@media (max-width:767px){
+@media (max-width:767.98px){
   #actHero .heroWord{position:absolute;top:22%;left:0;right:0;transform:none;text-align:center;font-size:2.5rem}
   #actHero .heroWord.r{top:calc(22% + 3rem)}
   #actHero .footer{left:1.25rem;right:1.25rem;bottom:1.25rem}
   #actHero .pills{display:grid;grid-template-columns:1fr 1fr}
-  #actHero .pill{min-width:0;padding:0.5rem 0.5rem}
+  /* .pill is nowrap + flex:0 0 auto for the desktop row; inside a grid cell that
+     makes long labels size to their text and spill instead of fitting. */
+  #actHero .pill{min-width:0;padding:0.5rem 0.5rem;white-space:normal;flex:1 1 auto}
   #actHero .lower{flex-direction:column;align-items:stretch}
-  #actHero .ctas{flex-wrap:wrap}
+  /* the two CTAs sat at different widths — solid stretched, ghost hugged its text */
+  #actHero .ctas{flex-wrap:wrap;gap:0.625rem}
+  #actHero .ctas .btn{width:100%}
   .btn.solid{width:100%}
 }
 
@@ -242,7 +251,7 @@ body.menu-open #menuClose{opacity:1}
 #actHand .stat .n{font-size:2rem;font-weight:200;line-height:1}
 #actHand .stat .l{font-size:1rem;font-weight:300;opacity:.8;margin-top:0.25rem}
 #actHand .corner{position:absolute;right:1.875rem;bottom:1.875rem;text-align:right}
-@media (max-width:767px){
+@media (max-width:767.98px){
   #actHand .head{top:5rem;left:1.25rem;right:1.25rem;font-size:2.5rem}
   #actHand .head .h2{font-size:2.5rem}
   #actHand .cluster{left:1.25rem;right:1.25rem;bottom:1.25rem}
@@ -268,10 +277,15 @@ body.menu-open #menuClose{opacity:1}
 }
 #actWave .card .n{font-size:1rem;font-weight:400}
 #actWave .card .d{font-size:1rem;font-weight:300;line-height:1.35}
-@media (max-width:767px){
+@media (max-width:767.98px){
   #actWave .col{top:5rem;left:1.25rem;right:1.25rem;bottom:1.25rem;width:auto;max-width:none}
   #actWave .h2{font-size:2.5rem}
-  #actWave .card{min-height:6rem}
+  /* min-height on a card inside a 1fr grid is a floor the grid cannot honour:
+     four cards forced the column past the bottom of a 100vh stage. Let the rows
+     divide the space that exists and clip anything that still will not fit. */
+  #actWave .cards{gap:0.5rem;margin-top:1rem;min-height:0}
+  #actWave .card{min-height:0;overflow:hidden;padding:0.75rem}
+  #actWave .tag{margin-top:0.75rem}
 }
 
 /* tree */
@@ -280,7 +294,7 @@ body.menu-open #menuClose{opacity:1}
 #actTree .side.l{left:1.875rem}
 #actTree .side.r{right:1.875rem;text-align:right}
 .liveDot{width:0.375rem;height:0.375rem;background:var(--overlay-accent);flex:0 0 auto}
-@media (max-width:767px){
+@media (max-width:767.98px){
   #actTree .envision{top:5rem;font-size:3rem}
   #actTree .side.l{left:1.25rem;right:1.25rem;width:auto;text-align:center}
   #actTree .side.r{display:none}
@@ -394,19 +408,40 @@ body.menu-open #menuClose{opacity:1}
 #actTreeB .bar .btn.solid{width:auto;padding:0 2.9375rem}
 
 /* pass B is dense — shed detail rather than overflow on small screens */
-@media (max-width:1023px){
+@media (max-width:1023.98px){
   #actHandB .grid,#actWaveB .grid{gap:0.5rem}
   .svc-sub{display:none}
+}
+/* Tablet band: the desktop layout still applies here (the mobile rules stop at
+   767px) but at a much smaller rem, so blocks laid out side by side run into
+   each other. Measured at 768x1024: .cluster overlapped .corner by 58x96px and
+   ran 21px past the bottom. */
+/* Upper bound matches the 1.5625vw font tier, which ends at 1024 inclusive —
+   that tier's larger rem is what brings these blocks together. .corner has no
+   width cap (515px of right-aligned text at 1024), so it reaches back into
+   .cluster. At 1025px the rem drops to 1.111vw and they clear unaided. */
+@media (min-width:768px) and (max-width:1024.98px){
+  #actHand .corner{display:none}
+  #actHand .cluster{max-width:calc(100% - 3.75rem)}
+  #actHand .stats{gap:1.5rem;margin-top:1.25rem}
+  #actTree .side{width:16rem}
+  #actTreeB .colL,#actTreeB .colR{width:15rem}
 }
 @media (max-height:780px){
   .svc-sub{display:none}
 }
-@media (max-width:767px){
+@media (max-width:767.98px){
   #actHeroB .lead{top:20%;transform:none;left:1.25rem;right:1.25rem;width:auto;text-align:center}
   #actHeroB .lead .h2b{font-size:1.75rem}
   #actHeroB .aside{display:none}
   #actHeroB .footer{left:1.25rem;right:1.25rem;bottom:1.25rem}
-  #actHeroB .pills{display:grid;grid-template-columns:1fr 1fr}
+  #actHeroB .pills{display:grid;grid-template-columns:1fr 1fr;gap:0.5rem}
+  /* "Marketing & Distribution" and "Support & Partnership" cannot fit a half
+     width on one line, so nowrap pushed them ~110px past the screen edge. */
+  #actHeroB .pill{
+    min-width:0;flex:1 1 auto;white-space:normal;
+    padding:0.5rem 0.75rem;text-align:center;line-height:1.25;
+  }
   #actHandB .head{display:none}
   #actHandB .grid{left:1.25rem;right:1.25rem;width:auto;max-width:none}
   #actWaveB .col{top:5rem;left:1.25rem;right:1.25rem;width:auto;max-width:none}
@@ -420,6 +455,19 @@ body.menu-open #menuClose{opacity:1}
   #actTreeB .bar input{width:100%}
   #actTreeB .bar .btn.solid{width:100%;padding:0}
   .svc-desc{display:none}
+}
+
+/* Short phones (iPhone SE/8, most 16:9 Androids). The acts are pinned to 100vh,
+   so there is no scroll to absorb overflow — headings have to give way instead.
+   Measured at 390x667: .heroWord met .footer by 16px, .headc met .colL by 8px. */
+@media (max-width:767.98px) and (max-height:720px){
+  #actHero .heroWord{top:14%;font-size:2rem}
+  #actHero .heroWord.r{top:calc(14% + 2.4rem)}
+  #actHand .head .h2{font-size:2rem}
+  #actWave .h2{font-size:2rem}
+  #actTree .envision{font-size:2.5rem}
+  #actHeroB .lead .h2b,#actTreeB .headc .h2b,#actWaveB .h2b{font-size:1.5rem}
+  #actTreeB .colL{top:44%}
 }
 </style>
 </head>
