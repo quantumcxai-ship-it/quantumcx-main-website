@@ -228,17 +228,25 @@ body.menu-open #menuClose{opacity:1}
   -webkit-backdrop-filter:blur(var(--blur-overlay-glass));backdrop-filter:blur(var(--blur-overlay-glass));
 }
 @media (max-width:767.98px){
-  #actHero .heroWord{position:absolute;top:22%;left:0;right:0;transform:none;text-align:center;font-size:2.5rem}
-  #actHero .heroWord.r{top:calc(22% + 3rem)}
+  /* The headline owns the band above the figure, which the portrait view offset
+     lifts to roughly 28-56% of the screen. Measured on a 390x844 phone. */
+  #actHero .heroWord{position:absolute;top:12%;left:0;right:0;transform:none;text-align:center;font-size:2.25rem}
+  #actHero .heroWord.r{top:calc(12% + 2.6rem)}
   #actHero .footer{left:1.25rem;right:1.25rem;bottom:1.25rem}
   #actHero .pills{display:grid;grid-template-columns:1fr 1fr}
   /* .pill is nowrap + flex:0 0 auto for the desktop row; inside a grid cell that
      makes long labels size to their text and spill instead of fitting. */
   #actHero .pill{min-width:0;padding:0.5rem 0.5rem;white-space:normal;flex:1 1 auto}
   #actHero .lower{flex-direction:column;align-items:stretch}
-  /* the two CTAs sat at different widths — solid stretched, ghost hugged its text */
-  #actHero .ctas{flex-wrap:wrap;gap:0.625rem}
-  #actHero .ctas .btn{width:100%}
+  /* Side by side rather than stacked: equal widths fix the old ragged look and
+     reclaim a button's height, which the figure band needs on a phone. */
+  #actHero .ctas{display:grid;grid-template-columns:1fr 1fr;gap:0.625rem}
+  /* .btn is nowrap with 1.5rem padding, which leaves ~122px of text room at half
+     width — "Explore the Systems" needs ~170px. Let it wrap instead of spill. */
+  #actHero .ctas .btn{
+    width:100%;padding:0 0.75rem;text-align:center;
+    white-space:normal;line-height:1.15;height:auto;min-height:2.75rem;
+  }
   .btn.solid{width:100%}
 }
 
@@ -296,7 +304,8 @@ body.menu-open #menuClose{opacity:1}
 .liveDot{width:0.375rem;height:0.375rem;background:var(--overlay-accent);flex:0 0 auto}
 @media (max-width:767.98px){
   #actTree .envision{top:5rem;font-size:3rem}
-  #actTree .side.l{left:1.25rem;right:1.25rem;width:auto;text-align:center}
+  /* was centred at 50%, i.e. inside the figure — drop it below the lifted band */
+  #actTree .side.l{left:1.25rem;right:1.25rem;width:auto;text-align:center;top:auto;bottom:2rem;transform:none}
   #actTree .side.r{display:none}
 }
 
@@ -420,6 +429,15 @@ body.menu-open #menuClose{opacity:1}
    that tier's larger rem is what brings these blocks together. .corner has no
    width cap (515px of right-aligned text at 1024), so it reaches back into
    .cluster. At 1025px the rem drops to 1.111vw and they clear unaided. */
+/* A portrait tablet gets the portrait camera but, being wider than 767.98px,
+   the desktop text layout — so vertically-centred copy lands in the figure band.
+   Measured at 768x1024: .heroWord by 46px, .side by 72px, B1's .h2b by 126px. */
+@media (min-width:768px) and (orientation:portrait){
+  #actHero .heroWord{top:14%}
+  #actHero .heroWord.r{top:calc(14% + 4rem)}
+  #actTree .side{top:auto;bottom:2.5rem;transform:none}
+  #actHeroB .lead,#actHeroB .aside{top:9.5%;transform:none}
+}
 @media (min-width:768px) and (max-width:1024.98px){
   #actHand .corner{display:none}
   #actHand .cluster{max-width:calc(100% - 3.75rem)}
@@ -431,7 +449,7 @@ body.menu-open #menuClose{opacity:1}
   .svc-sub{display:none}
 }
 @media (max-width:767.98px){
-  #actHeroB .lead{top:20%;transform:none;left:1.25rem;right:1.25rem;width:auto;text-align:center}
+  #actHeroB .lead{top:12%;transform:none;left:1.25rem;right:1.25rem;width:auto;text-align:center}
   #actHeroB .lead .h2b{font-size:1.75rem}
   #actHeroB .aside{display:none}
   #actHeroB .footer{left:1.25rem;right:1.25rem;bottom:1.25rem}
@@ -2709,11 +2727,48 @@ renderer.toneMapping = THREE.NoToneMapping;
 renderPass.enabled = false;
 wipePass.enabled = true;
 
+/* A perspective camera holds its *vertical* field of view fixed, so a portrait
+   phone does not shrink the scene — it crops the sides off it. The figures were
+   composed for a landscape frame, so on a phone they kept their full height and
+   simply grew past both edges: the hero logo measured 454px wide on a 390px
+   screen and covered the copy.
+
+   Widening the vertical FOV on narrow screens restores the horizontal view the
+   composition assumes, which pulls the figures back to a smaller centre band and
+   frees the top and bottom for text. Clamped, because full compensation at phone
+   aspect works out near 90deg and the perspective distortion is grotesque. */
+/* 1.2, not 16/9, so every landscape desktop keeps the original 32deg framing
+   exactly — compensation only starts once the frame approaches square, and is
+   continuous at the boundary rather than stepping. */
+const REF_ASPECT = 1.2;
+const MAX_FOV = 60;
+const PORTRAIT_LIFT = 0.06;   // fraction of viewport height; tuned by measurement
+function fitFov(aspect) {
+  if (!(aspect > 0) || aspect >= REF_ASPECT) return SEQ.fov;
+  const hHalf = Math.atan(Math.tan(SEQ.fov * Math.PI / 360) * REF_ASPECT);
+  return Math.min(MAX_FOV, 2 * Math.atan(Math.tan(hHalf) / aspect) * 180 / Math.PI);
+}
+
 function sizeAll() {
   const w = stage.clientWidth || window.innerWidth;
   const h = stage.clientHeight || window.innerHeight;
-  camera.aspect = w / h; camera.updateProjectionMatrix();
-  treeCamera.aspect = w / h; treeCamera.updateProjectionMatrix();
+  const fov = fitFov(w / h);
+  camera.aspect = w / h; camera.fov = fov;
+  treeCamera.aspect = w / h; treeCamera.fov = fov;
+  /* Portrait also needs the scene lifted: the copy stacks into the bottom half
+     of a phone, so a centred figure sits under it. A view offset shifts the
+     rendered window without touching the camera path, so the choreography and
+     the loop seam are untouched. */
+  if (w / h < 1) {
+    const lift = Math.round(h * PORTRAIT_LIFT);
+    camera.setViewOffset(w, h, 0, lift, w, h);
+    treeCamera.setViewOffset(w, h, 0, lift, w, h);
+  } else {
+    camera.clearViewOffset();
+    treeCamera.clearViewOffset();
+  }
+  camera.updateProjectionMatrix();
+  treeCamera.updateProjectionMatrix();
   renderer.setSize(w, h, false);
   composer.setSize(w, h);
   const bw = Math.round(w * DPR_CAP), bh = Math.round(h * DPR_CAP);
