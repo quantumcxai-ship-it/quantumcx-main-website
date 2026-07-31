@@ -5,6 +5,53 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>QuantumCX — AI-Powered Business Systems &amp; Automation</title>
 <meta name="description" content="QuantumCX builds AI-powered business systems — websites, chatbots, WhatsApp automation, CRM pipelines and lead engines that run 24/7." />
+<link rel="canonical" href="https://www.quantumcx.net/" />
+<meta name="theme-color" content="#0b0d10" />
+
+<!-- link previews: WhatsApp, LinkedIn, Slack, iMessage, X -->
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="QuantumCX" />
+<meta property="og:url" content="https://www.quantumcx.net/" />
+<meta property="og:title" content="QuantumCX — AI-Powered Business Systems &amp; Automation" />
+<meta property="og:description" content="AI-powered business systems that capture, qualify and convert — running 24/7 so your team never chases a cold lead again." />
+<meta property="og:image" content="https://www.quantumcx.net/assets/og-image.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content="QuantumCX — AI-Powered Business Systems &amp; Automation" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="QuantumCX — AI-Powered Business Systems &amp; Automation" />
+<meta name="twitter:description" content="AI-powered business systems that capture, qualify and convert — running 24/7 so your team never chases a cold lead again." />
+<meta name="twitter:image" content="https://www.quantumcx.net/assets/og-image.png" />
+
+<link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png" />
+<link rel="icon" type="image/png" sizes="192x192" href="assets/icon-192.png" />
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": "https://www.quantumcx.net/#organization",
+      "name": "QuantumCX",
+      "url": "https://www.quantumcx.net/",
+      "logo": "https://www.quantumcx.net/assets/icon-192.png",
+      "image": "https://www.quantumcx.net/assets/og-image.png",
+      "description": "QuantumCX builds AI-powered business systems — websites, chatbots, WhatsApp automation, CRM pipelines and lead engines that run 24/7.",
+      "slogan": "AI-Powered Business Systems & Automation"
+    },
+    {
+      "@type": "WebSite",
+      "@id": "https://www.quantumcx.net/#website",
+      "url": "https://www.quantumcx.net/",
+      "name": "QuantumCX",
+      "publisher": { "@id": "https://www.quantumcx.net/#organization" },
+      "inLanguage": "en"
+    }
+  ]
+}
+</script>
 
 <script type="importmap">
 { "imports": {
@@ -180,6 +227,14 @@ body.menu-open #menu{opacity:1;visibility:visible}
 }
 #menuClose{position:fixed;top:0.75rem;right:1.25rem;z-index:260;background:none;border:0;cursor:pointer;font-size:1.5rem;line-height:1;opacity:0}
 body.menu-open #menuClose{opacity:1}
+
+/* The page's one h1. It lives outside the acts because those animate their
+   opacity, and it is clipped rather than display:none — hiding it that way
+   removes it from the accessibility tree and devalues it as a heading. */
+.sr-only{
+  position:absolute;width:1px;height:1px;margin:-1px;padding:0;
+  overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0;
+}
 
 /* ------------------------------------------------------------- overlays */
 .act{
@@ -490,6 +545,8 @@ body.menu-open #menuClose{opacity:1}
 </style>
 </head>
 <body>
+
+<h1 class="sr-only">QuantumCX — AI-powered business systems and automation</h1>
 
 <div id="film">
 <div id="stage">
