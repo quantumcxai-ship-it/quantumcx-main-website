@@ -2453,168 +2453,6 @@ function sampleBrainSurface(tri, count, seed) {
   return { pts, nrm };
 }
 
-/* ==================================================================== */
-/*  PASS A FIGURES — swarm, mesh, orbit                                  */
-/*                                                                       */
-/*  Chaos -> connection -> continuity. Act 2 is enquiries arriving with   */
-/*  no order; act 3 is the same beads snapping into the system that       */
-/*  catches and routes them; act 4 is that system running on its own.     */
-/*  Acts 2 and 3 share one cloud, so the morph between them IS the        */
-/*  argument — it is the one thing this engine does that a video cannot.  */
-/* ==================================================================== */
-
-/* Sized to the band this act leaves free. Measured at 1000x720: the heading is
-   a two-line block ending at y=211 and the tag starts at y=548, so the cloud
-   has to live inside ~337px. At 27px per world unit that is about 12 units;
-   anything taller pushes beads up under the heading. */
-const SWARM = {
-  seed: 30411, radius: 5.9, height: 11.5, depth: 5,
-  clusters: 24, clustered: 0.62, tight: 0.74,
-};
-
-/* Act 2 — loose motes, some knotted into clusters, the rest drifting
-   singly. Deliberately uneven: a uniform particle field reads as decoration,
-   whereas clumping reads as signal arriving at random. */
-function swarmPoints(count, seed) {
-  const S = SWARM, rnd = mulberry32(seed);
-  const pts = new Float32Array(count * 3);
-  const nrm = new Float32Array(count * 3);
-  const cx = [], cy = [], cz = [];
-  for (let c = 0; c < S.clusters; c++) {
-    const t = rnd() * TAU, u = rnd() * 2 - 1, r = S.radius * Math.cbrt(rnd());
-    const ring = Math.sqrt(1 - u * u);
-    cx.push(Math.cos(t) * r * ring);
-    cy.push(u * S.height * 0.5);
-    cz.push(Math.sin(t) * r * ring * (S.depth / S.radius));
-  }
-  for (let i = 0; i < count; i++) {
-    const i3 = i * 3;
-    let x, y, z;
-    if (rnd() < S.clustered) {
-      const c = (rnd() * S.clusters) | 0, s = S.tight * (0.3 + rnd() * 1.1);
-      x = cx[c] + (rnd() * 2 - 1) * s;
-      y = cy[c] + (rnd() * 2 - 1) * s;
-      z = cz[c] + (rnd() * 2 - 1) * s * 0.7;
-    } else {
-      const t = rnd() * TAU, u = rnd() * 2 - 1;
-      const r = S.radius * (0.3 + 0.7 * Math.cbrt(rnd())), ring = Math.sqrt(1 - u * u);
-      x = Math.cos(t) * r * ring;
-      y = u * S.height * 0.5;
-      z = Math.sin(t) * r * ring * (S.depth / S.radius);
-    }
-    pts[i3] = x; pts[i3 + 1] = y; pts[i3 + 2] = z;
-    const l = Math.hypot(x, y, z) || 1;
-    nrm[i3] = x / l; nrm[i3 + 1] = y / l; nrm[i3 + 2] = z / l;
-  }
-  return { pts, nrm, count };
-}
-
-/* Act 3 — the same beads land on a lattice. Most of them sit ALONG the
-   struts rather than on the nodes, which is what makes the connections read
-   as filaments without adding a second geometry or a line shader. */
-/* Centre and spacing are measured, not guessed: at spacing 3.1 the lattice
-   projected 1390px wide on an 885px viewport and sat ~490px left of frame,
-   because the curtain it replaced was a full-bleed wall and never needed
-   framing. A discrete structure does. */
-const MESH = {
-  center: new THREE.Vector3(0, 34.4, -120),
-  cols: 10, rows: 6, layers: 3,
-  spacing: 2, layerGap: 1.6,
-  tilt: 0.45, yaw: 0.6,
-  nodeFrac: 0.26, nodeTight: 0.13, strutJitter: 0.045,
-  edgeFade: 0.26, amplitude: 2,
-  /* Portrait stacks this act's copy full-width above the lattice, and the
-     portrait view offset lifts the scene as well, so on a phone 12.5% of the
-     beads landed under the paragraph. Desktop needs no drop — applying one
-     globally makes it bottom-heavy there — so it is measured per orientation. */
-  portraitDrop: -5.6,
-};
-
-function makeMesh(count) {
-  const M = MESH;
-  const dest = new Float32Array(count * 3);
-  const rc = new Float32Array(count * 2);
-  const rdir = new Float32Array(count * 3);
-  const edge = new Float32Array(count);
-  const rnd = mulberry32(4243);
-
-  const halfX = (M.cols - 1) * 0.5, halfY = (M.rows - 1) * 0.5, halfZ = (M.layers - 1) * 0.5;
-  const node = (ix, iy, iz) => [
-    (ix - halfX) * M.spacing, (iy - halfY) * M.spacing, (iz - halfZ) * M.layerGap,
-  ];
-  // struts: neighbours along x and y within a layer, plus the layer stitching
-  const struts = [];
-  for (let iz = 0; iz < M.layers; iz++)
-    for (let iy = 0; iy < M.rows; iy++)
-      for (let ix = 0; ix < M.cols; ix++) {
-        if (ix + 1 < M.cols) struts.push([node(ix, iy, iz), node(ix + 1, iy, iz)]);
-        if (iy + 1 < M.rows) struts.push([node(ix, iy, iz), node(ix, iy + 1, iz)]);
-        if (iz + 1 < M.layers && (ix + iy) % 2 === 0)
-          struts.push([node(ix, iy, iz), node(ix, iy, iz + 1)]);
-      }
-
-  const cT = Math.cos(M.tilt), sT = Math.sin(M.tilt);
-  const cY = Math.cos(M.yaw), sY = Math.sin(M.yaw);
-  const spanX = halfX * M.spacing, spanY = halfY * M.spacing;
-  const portrait = stage.clientHeight > stage.clientWidth;
-  const cy0 = M.center.y + (portrait ? M.portraitDrop : 0);
-
-  for (let i = 0; i < count; i++) {
-    let lx, ly, lz;
-    if (rnd() < M.nodeFrac) {
-      const ix = (rnd() * M.cols) | 0, iy = (rnd() * M.rows) | 0, iz = (rnd() * M.layers) | 0;
-      const n = node(ix, iy, iz), t = M.nodeTight;
-      lx = n[0] + (rnd() * 2 - 1) * t;
-      ly = n[1] + (rnd() * 2 - 1) * t;
-      lz = n[2] + (rnd() * 2 - 1) * t;
-    } else {
-      const s = struts[(rnd() * struts.length) | 0], t = rnd(), j = M.strutJitter;
-      lx = s[0][0] + (s[1][0] - s[0][0]) * t + (rnd() * 2 - 1) * j;
-      ly = s[0][1] + (s[1][1] - s[0][1]) * t + (rnd() * 2 - 1) * j;
-      lz = s[0][2] + (s[1][2] - s[0][2]) * t + (rnd() * 2 - 1) * j;
-    }
-    // tilt about X, then yaw about Y — same orientation the curtain used, so
-    // the camera choreography still frames it
-    const ty = ly * cT - lz * sT, tz = ly * sT + lz * cT;
-    const i3 = i * 3;
-    dest[i3] = M.center.x + lx * cY + tz * sY;
-    dest[i3 + 1] = cy0 + ty;
-    dest[i3 + 2] = M.center.z + (-lx * sY + tz * cY);
-    rc[i * 2] = lx; rc[i * 2 + 1] = ly;
-    rdir[i3] = 0; rdir[i3 + 1] = 1; rdir[i3 + 2] = 0;
-    const u = clamp01(0.5 + lx / (2 * spanX || 1)), v = clamp01(0.5 + ly / (2 * spanY || 1));
-    edge[i] = smoothstep(0, M.edgeFade, Math.min(u, 1 - u)) *
-              smoothstep(0, M.edgeFade, Math.min(v, 1 - v));
-  }
-  return { dest, rc, rdir, edge, amp: MESH.amplitude, focus: MESH.center };
-}
-
-/* Act 4 — a core with satellites on inclined orbits: the systems running
-   around the business, continuously. Built from capsules so the existing
-   union sampler serves it, exactly as the helix does. Extent is matched to
-   the helix (about +/-8) so the tree camera frames it without retuning. */
-const ORBIT = {
-  coreR: 2.8, ringR: [5.6, 7.0, 8.2], tube: 0.32, segs: 128,
-  incl: [0.12, 0.86, -0.62], phase: [0, 1.15, 2.3],
-};
-
-function orbitCaps() {
-  const O = ORBIT, caps = [];
-  caps.push({ a: [0, 0, 0], b: [0, 0, 0], r: O.coreR });   // the core, as a sphere
-  for (let k = 0; k < O.ringR.length; k++) {
-    const R = O.ringR[k], ci = Math.cos(O.incl[k]), si = Math.sin(O.incl[k]);
-    let prev = null;
-    for (let s = 0; s <= O.segs; s++) {
-      const a = O.phase[k] + (s / O.segs) * TAU;
-      const x = R * Math.cos(a), z0 = R * Math.sin(a);
-      const q = [x, z0 * si, z0 * ci];
-      if (prev) caps.push({ a: prev, b: q, r: O.tube });
-      prev = q;
-    }
-  }
-  return caps;
-}
-
 function brainPoints(count, seed) {
   const B = BRAIN;
   const S = sampleBrainSurface(decodeBrainMesh(), count, seed);
@@ -3032,8 +2870,6 @@ window.addEventListener("resize", () => {
    spacing goes 0.07 to 0.11, both well past overlapping. */
 const BRAIN_COUNT = Math.max(12000, Math.round(60000 * PSCALE));
 const HELIX_COUNT = Math.max(8000, Math.round(70000 * PSCALE));
-const SWARM_COUNT = Math.max(9000, Math.round(22000 * PSCALE));
-const ORBIT_COUNT = Math.max(9000, Math.round(64000 * PSCALE));
 
 const SETS = [
   { name: "A", glyph: null, hand: null, tree: null, wave: null, held: null, relax: null },
@@ -3806,25 +3642,23 @@ function attachHand(st, cloud, waveTarget, sparse) {
     bakeTree(SETS[1], helixSrc, TREE, 51824);
   } catch (e) { console.error("pass B figures failed", e); }
 
-  /* -------------------------------------------- pass A: swarm -> mesh
-     Procedural, so pass A no longer fetches hand-points.bin or
-     tree-points.bin — 310 KB of the payload gone with them. */
+  /* ------------------------------------------------------------ hand */
   try {
-    const sw = swarmPoints(SWARM_COUNT, SWARM.seed);
+    const hp = await loadPoints(ASSETS + "hand-points.bin", HAND, HAND_DENSITY, HAND.seed, HAND.size);
     attachHand(SETS[0], buildCloud({
-      points: sw.pts, normals: sw.nrm, count: sw.count,
+      points: hp.pts, normals: hp.nrm, count: hp.count,
       center: HAND.center, rotation: HAND.rotation,
       particleSize: HAND.size, sizeJitter: HAND.sizeJitter, light: HAND.light,
-      seed: SWARM.seed + 1, relax: false, shadow: true, life: LIFE.hand,
-    }), makeMesh(sw.count), HAND.sparse);
-  } catch (e) { console.error("swarm/mesh failed", e); }
+      seed: HAND.seed + 1, relax: false, shadow: true, life: LIFE.hand,
+    }), makeCurtain(hp.count), HAND.sparse);
+  } catch (e) { console.error("hand load failed", e); }
   handLoaded = true; gates();
 
-  /* ------------------------------------------------------------ orbit */
+  /* ------------------------------------------------------------ tree */
   try {
-    const orb = capsuleUnionPoints(orbitCaps(), ORBIT_COUNT, 30517, false);
-    bakeTree(SETS[0], orb, TREE, 30518);
-  } catch (e) { console.error("orbit failed", e); }
+    const tp = await loadPoints(ASSETS + "tree-points.bin", TREE, TREE_DENSITY, TREE.seed, TREE.size);
+    bakeTree(SETS[0], tp, TREE, TREE.seed + 1);
+  } catch (e) { console.error("tree load failed", e); }
   treeLoaded = true; gates();
 
   /* -------------------------------------------------- warm-up / precompile */
