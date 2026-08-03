@@ -458,18 +458,32 @@ body.menu-open #menuClose{opacity:1}
 #actTreeB .colL{left:1.875rem}
 #actTreeB .colR{right:1.875rem}
 #actTreeB .barwrap{position:absolute;left:0;right:0;bottom:1.875rem;display:flex;justify-content:center}
+/* Five fields plus a button will not fit one row at any readable width, so the
+   bar is a two-row grid rather than a single pill: name / email / company /
+   phone across the top, message and the button beneath. */
 #actTreeB .bar{
-  display:flex;align-items:center;gap:1.75rem;
-  padding:0.25rem;padding-left:2rem;border-radius:999px;
+  display:grid;grid-template-columns:repeat(4,10rem);
+  gap:0.875rem 1.25rem;align-items:center;
+  padding:1.125rem 1.375rem;border-radius:1.5rem;
   background:var(--overlay-glass);border:1px solid var(--overlay-edge);
   -webkit-backdrop-filter:blur(var(--blur-overlay-form));backdrop-filter:blur(var(--blur-overlay-form));
 }
 #actTreeB .bar{margin:0}
-#actTreeB .bar input{width:9.5rem;background:transparent;border:0;outline:none;font-size:1rem;font-weight:300}
+#actTreeB .bar input,#actTreeB .bar textarea{
+  width:100%;background:transparent;border:0;outline:none;
+  font:inherit;font-size:1rem;font-weight:300;color:inherit;
+}
+#actTreeB .bar textarea{
+  grid-column:1 / span 3;resize:none;height:2.75rem;line-height:1.35;padding-top:0.4rem;
+}
 /* honeypot: offscreen rather than display:none, which bots skip */
-.hp{position:absolute;left:-9999px;width:1px;height:1px;opacity:0;pointer-events:none}
-#actTreeB .bar input::placeholder{color:var(--overlay-strong)}
-#actTreeB .bar .btn.solid{width:auto;padding:0 2.9375rem}
+/* The id-scoped input/textarea rule above out-specifies a bare .hp, which
+   stretched the field to full width — still offscreen, but sloppy. */
+#actTreeB .bar input.hp,.hp{
+  position:absolute;left:-9999px;width:1px;height:1px;opacity:0;pointer-events:none;
+}
+#actTreeB .bar input::placeholder,#actTreeB .bar textarea::placeholder{color:var(--overlay-strong)}
+#actTreeB .bar .btn.solid{grid-column:4;width:100%;padding:0}
 
 /* pass B is dense — shed detail rather than overflow on small screens */
 @media (max-width:1023.98px){
@@ -524,9 +538,11 @@ body.menu-open #menuClose{opacity:1}
   #actTreeB .colL{left:1.25rem;right:1.25rem;width:auto;top:38%}
   #actTreeB .colR{display:none}
   #actTreeB .barwrap{left:1.25rem;right:1.25rem;bottom:1.25rem}
-  #actTreeB .bar{flex-direction:column;align-items:stretch;gap:0.75rem;width:100%;border-radius:1.25rem;padding:1rem}
-  #actTreeB .bar input{width:100%}
-  #actTreeB .bar .btn.solid{width:100%;padding:0}
+  #actTreeB .bar{grid-template-columns:1fr;align-items:stretch;gap:0.75rem;width:100%;border-radius:1.25rem;padding:1rem}
+  #actTreeB .bar input,#actTreeB .bar textarea{width:100%}
+  /* single column on a phone, so nothing spans */
+  #actTreeB .bar textarea{grid-column:1;height:3.5rem}
+  #actTreeB .bar .btn.solid{grid-column:1;width:100%;padding:0}
   .svc-desc{display:none}
 }
 
@@ -541,6 +557,11 @@ body.menu-open #menuClose{opacity:1}
   #actTree .envision{font-size:2.5rem}
   #actHeroB .lead .h2b,#actTreeB .headc .h2b,#actWaveB .h2b{font-size:1.5rem}
   #actTreeB .colL{top:44%}
+  /* phone + message make the bar ~65px taller; on a 568px screen that ran it
+     into the service cards, so the form tightens rather than the cards go. */
+  #actTreeB .colL{top:36%}
+  #actTreeB .bar{gap:0.5rem;padding:0.75rem}
+  #actTreeB .bar textarea{height:2.5rem}
 }
 </style>
 </head>
@@ -774,6 +795,8 @@ body.menu-open #menuClose{opacity:1}
         <input type="text" name="name" placeholder="Name" aria-label="Name" autocomplete="name" />
         <input type="email" name="email" placeholder="Email" aria-label="Email" autocomplete="email" required />
         <input type="text" name="company" placeholder="Company" aria-label="Company" autocomplete="organization" required />
+        <input type="tel" name="phone" placeholder="Phone (optional)" aria-label="Phone" autocomplete="tel" />
+        <textarea name="message" placeholder="What do you need automated? (optional)" aria-label="Message" rows="1"></textarea>
         <input type="text" name="website" class="hp" tabindex="-1" autocomplete="off" aria-hidden="true" />
         <button class="btn solid" type="submit"><span class="liveDot"></span><span class="lbl">Book a Free Audit</span></button>
       </form>
@@ -1290,6 +1313,8 @@ if (leadForm) {
     const name = leadForm.elements.name.value.trim();
     const email = leadForm.elements.email.value.trim();
     const company = leadForm.elements.company.value.trim();
+    const phone = leadForm.elements.phone.value.trim();     // optional
+    const message = leadForm.elements.message.value.trim(); // optional
     if (!EMAIL_RE.test(email)) {
       leadForm.elements.email.focus();
       say("Enter a valid email", true);
@@ -1307,7 +1332,7 @@ if (leadForm) {
       const res = await fetch(LEAD_ENDPOINT, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name, email, company, website: leadForm.elements.website.value }),
+        body: JSON.stringify({ name, email, company, phone, message, website: leadForm.elements.website.value }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "failed");
