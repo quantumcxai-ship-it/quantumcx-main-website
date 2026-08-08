@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Form demo — QuantumCX</title>
+<meta name="description" content="A live demonstration of the QuantumCX form service: one script tag, enquiries stored the moment they are sent, and an email in your inbox." />
+<!-- A demo, not a page to rank. Keep it out of the index. -->
+<meta name="robots" content="noindex,follow" />
+<link rel="canonical" href="https://www.quantumcx.net/form-demo/" />
+<link rel="icon" href="../assets/favicon-32.png" sizes="32x32" />
+
+<style>
+/* Fonts are the site's own, one directory up. Only the two weights this
+   page actually uses — the demo should not cost more than it demonstrates. */
+@font-face{
+  font-family:"Google Sans Flex";
+  src:url("../assets/GoogleSansFlex_9pt-Light.woff2") format("woff2");
+  font-weight:300; font-style:normal; font-display:swap;
+}
+@font-face{
+  font-family:"Google Sans Flex";
+  src:url("../assets/GoogleSansFlex_9pt-Regular.woff2") format("woff2");
+  font-weight:400; font-style:normal; font-display:swap;
+}
+
+:root{
+  --ink:#f2f5f7;
+  --muted:rgba(242,245,247,0.62);
+  --line:rgba(242,245,247,0.16);
+  --panel:rgba(255,255,255,0.04);
+  --accent:#6fff85;
+}
+
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:#10151a;
+  color:var(--ink);
+  font-family:"Google Sans Flex",system-ui,sans-serif;
+  font-weight:300;
+  line-height:1.55;
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+}
+.wrap{max-width:52rem;margin:0 auto;padding:clamp(2rem,6vw,5rem) clamp(1.25rem,5vw,2rem) 4rem}
+a{color:inherit}
+
+header{border-bottom:1px solid var(--line);padding-bottom:1.5rem;margin-bottom:2.5rem}
+.brand{font-size:.8rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+h1{font-weight:300;font-size:clamp(1.9rem,5.2vw,2.9rem);letter-spacing:-0.02em;margin:.6rem 0 0}
+.lede{color:var(--muted);max-width:38rem;margin:.9rem 0 0}
+
+h2{font-weight:400;font-size:1.05rem;letter-spacing:-0.01em;margin:0 0 .75rem}
+section{margin:0 0 2.75rem}
+
+/* The form panel. The embed inherits colour and font from here, which is the
+   point of the demonstration — it is not styled by us, it adopts the page. */
+.panel{
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-radius:.75rem;
+  padding:clamp(1.25rem,4vw,2rem);
+}
+.panel .hint{color:var(--muted);font-size:.9rem;margin:0 0 1.25rem}
+
+ol.how{margin:0;padding:0;counter-reset:s;list-style:none}
+ol.how li{
+  counter-increment:s;position:relative;padding-left:2.25rem;margin:0 0 .85rem;color:var(--muted);
+}
+ol.how li::before{
+  content:counter(s,decimal-leading-zero);
+  position:absolute;left:0;top:.05em;
+  font-size:.78rem;letter-spacing:.06em;color:var(--accent);
+}
+ol.how strong{font-weight:400;color:var(--ink)}
+
+pre{
+  margin:0;padding:1rem 1.1rem;overflow-x:auto;
+  background:rgba(0,0,0,.35);border:1px solid var(--line);border-radius:.5rem;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  font-size:.82rem;line-height:1.7;color:var(--ink);
+}
+
+footer{border-top:1px solid var(--line);padding-top:1.5rem;color:var(--muted);font-size:.87rem}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <p class="brand">QuantumCX</p>
+    <h1>This form is the product.</h1>
+    <p class="lede">
+      One line of HTML on your site. Every enquiry is written to the database
+      the instant it is sent, then emailed to you. Send one below — it is real,
+      and it lands in our inbox.
+    </p>
+  </header>
+
+  <section>
+    <h2>Try it</h2>
+    <div class="panel">
+      <p class="hint">A genuine submission. Say hello, or just test it.</p>
+      <script src="https://lymmtgvqtwewenezkbnc.supabase.co/functions/v1/form-embed?k=qcx_live_e1ed55b8074e5c576d685d15b1fc2ff5"></script>
+    </div>
+  </section>
+
+  <section>
+    <h2>What you paste</h2>
+    <pre>&lt;script src="https://lymmtgvqtwewenezkbnc.supabase.co/functions/v1/form-embed?k=YOUR_KEY"&gt;&lt;/script&gt;</pre>
+  </section>
+
+  <section>
+    <h2>What happens when someone presses send</h2>
+    <ol class="how">
+      <li><strong>The enquiry is stored first.</strong> Before any email is attempted. If mail
+        breaks at three in the morning, the enquiry is still there in the morning.</li>
+      <li><strong>Then you are emailed.</strong> Name, phone, message, the page they were on,
+        and the time in your timezone.</li>
+      <li><strong>Reply straight from your inbox.</strong> The reply address is the enquirer's,
+        not ours. You never sign in to anything.</li>
+      <li><strong>Bots are dropped silently.</strong> A hidden field no human can fill, and a
+        limit on how fast one site can submit.</li>
+      <li><strong>Your key only works on your domain.</strong> Lifted and pasted elsewhere, it
+        is refused.</li>
+    </ol>
+  </section>
+
+  <footer>
+    <p>Demonstration page. <a href="/">Back to quantumcx.net</a></p>
+  </footer>
+
+</div>
+</body>
+</html>
