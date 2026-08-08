@@ -11,3 +11,6 @@ assets/robotic-arm-reference*.jpg
 Thumbs.db
 desktop.ini
 .DS_Store
+
+# local scratch page for form-service testing
+scratch-form-test.html
