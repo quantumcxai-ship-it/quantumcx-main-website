@@ -160,7 +160,12 @@ Deno.serve(async (req) => {
         ``,
         `—`,
         `Delivered by QuantumCX. Reply directly to this email to reach them.`,
-      ].join("\n");
+      ].join("\n")
+        // CRLF, not bare LF. GoDaddy answers 552 "bare LF ... violating 822.bis
+        // section 2.3" and drops the message. Normalise the whole body, not just
+        // the joins: the enquirer's own message carries LF the moment they press
+        // Enter in the textarea, so a client typing two paragraphs would fail.
+        .replace(/\r\n|\r|\n/g, "\r\n");
 
       const client = new SMTPClient({
         connection: {
