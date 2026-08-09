@@ -464,7 +464,12 @@ body.menu-open #menuClose{opacity:1}
 #actTreeB .bar{
   display:grid;grid-template-columns:repeat(4,10rem);
   gap:0.875rem 1.25rem;align-items:center;
-  padding:1.125rem 1.375rem;border-radius:1.5rem;
+  /* Bottom padding is larger than top on purpose. The top row is borderless
+     text whose ink starts ~6px inside its 22px box, so 1.125rem reads as ~24px
+     of clearance; the button is a filled pill with a hard edge, so the same
+     1.125rem read as cramped against the bar's own 1.5rem corner radius.
+     1.5rem below matches the optical gap above. */
+  padding:1.125rem 1.375rem 1.5rem;border-radius:1.5rem;
   background:var(--overlay-glass);border:1px solid var(--overlay-edge);
   -webkit-backdrop-filter:blur(var(--blur-overlay-form));backdrop-filter:blur(var(--blur-overlay-form));
 }
@@ -538,7 +543,8 @@ body.menu-open #menuClose{opacity:1}
   #actTreeB .colL{left:1.25rem;right:1.25rem;width:auto;top:38%}
   #actTreeB .colR{display:none}
   #actTreeB .barwrap{left:1.25rem;right:1.25rem;bottom:1.25rem}
-  #actTreeB .bar{grid-template-columns:1fr;align-items:stretch;gap:0.75rem;width:100%;border-radius:1.25rem;padding:1rem}
+  /* same optical correction as desktop: the button is the last item here too */
+  #actTreeB .bar{grid-template-columns:1fr;align-items:stretch;gap:0.75rem;width:100%;border-radius:1.25rem;padding:1rem 1rem 1.375rem}
   #actTreeB .bar input,#actTreeB .bar textarea{width:100%}
   /* single column on a phone, so nothing spans */
   #actTreeB .bar textarea{grid-column:1;height:3.5rem}
@@ -560,7 +566,7 @@ body.menu-open #menuClose{opacity:1}
   /* phone + message make the bar ~65px taller; on a 568px screen that ran it
      into the service cards, so the form tightens rather than the cards go. */
   #actTreeB .colL{top:36%}
-  #actTreeB .bar{gap:0.5rem;padding:0.75rem}
+  #actTreeB .bar{gap:0.5rem;padding:0.75rem 0.75rem 1.0625rem}
   #actTreeB .bar textarea{height:2.5rem}
 }
 </style>
