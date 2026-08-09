@@ -462,7 +462,11 @@ body.menu-open #menuClose{opacity:1}
    bar is a two-row grid rather than a single pill: name / email / company /
    phone across the top, message and the button beneath. */
 #actTreeB .bar{
-  display:grid;grid-template-columns:repeat(4,10rem);
+  /* The last column is wider than the other three: it holds the submit pill,
+     whose label is ~9.8rem on its own. At 10rem the text sat 1.5px from the
+     pill edge. 13rem leaves ~1.6rem either side at every font tier, since
+     both the label and the column scale with rem. */
+  display:grid;grid-template-columns:repeat(3,10rem) 13rem;
   gap:0.875rem 1.25rem;align-items:center;
   /* Bottom padding is larger than top on purpose. The top row is borderless
      text whose ink starts ~6px inside its 22px box, so 1.125rem reads as ~24px
@@ -488,7 +492,9 @@ body.menu-open #menuClose{opacity:1}
   position:absolute;left:-9999px;width:1px;height:1px;opacity:0;pointer-events:none;
 }
 #actTreeB .bar input::placeholder,#actTreeB .bar textarea::placeholder{color:var(--overlay-strong)}
-#actTreeB .bar .btn.solid{grid-column:4;width:100%;padding:0}
+/* Real horizontal padding rather than padding:0, so the label can never sit
+   against the pill edge again if the wording changes. */
+#actTreeB .bar .btn.solid{grid-column:4;width:100%;padding:0 1.5rem}
 
 /* pass B is dense — shed detail rather than overflow on small screens */
 @media (max-width:1023.98px){
