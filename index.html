@@ -1005,8 +1005,14 @@ const COARSE = window.matchMedia("(hover: none) and (pointer: coarse)").matches;
 const IS_MOBILE = window.innerWidth < 768 || COARSE;
 const IS_TABLET = !IS_MOBILE && window.innerWidth < 1180;
 const PSCALE = IS_MOBILE ? 0.34 : IS_TABLET ? 0.6 : 1;
+/* Mobile was capped at 0.85 — *below* CSS resolution. On a 3x phone that is a
+   318px-wide buffer stretched across 1125 physical pixels, so a moving point
+   cloud is sampled ~3.5x under the panel and crawls. That is the shimmer, and
+   no amount of simulation tuning fixes it. 1.25 is ~2.2x the pixels (469x1015,
+   under half a megapixel with the bloom chain on top) which modern phone GPUs
+   handle comfortably, and the frame gate degrades gracefully if one cannot. */
 const DPR_CAP = IS_MOBILE
-  ? Math.min(window.devicePixelRatio || 1, 0.85)
+  ? Math.min(window.devicePixelRatio || 1, 1.25)
   : IS_TABLET
     ? clamp(window.devicePixelRatio || 1, 0.75, 1.25)
     : clamp(window.devicePixelRatio || 1, 0.75, 1.5);
@@ -1030,8 +1036,16 @@ const USE_POINTER = !IS_MOBILE;
    Each point is an exponential relaxation toward a target, so updating half of
    them per frame is safe: compound the ease over the stride and the point lands
    exactly where it would have on its turn, holding for one frame in between.
-   For stride 2 the compound of e is e*(2-e) — no pow() in the inner loop. */
-const SIM_STRIDE = 2;
+   For stride 2 the compound of e is e*(2-e) — no pow() in the inner loop.
+
+   Mobile stays at stride 1. Phones render at 0.85 DPR into a small buffer, so
+   a point cloud is already close to the sampling limit there and holding a
+   point for a frame showed up as shimmer through the wave transform, where the
+   scan edge and the vortex move fastest. Mobile has the headroom to pay for it
+   after the two savings below, so it does. */
+const SIM_STRIDE = IS_MOBILE ? 1 : 2;
+const SIM_COMPOUND = SIM_STRIDE > 1;   // never compound at stride 1 — it would
+                                       // double every ease and change the motion
 let simPhase = 0;
 
 const GLYPH_COUNT = Math.max(8000, Math.round(GLYPH.count * PSCALE));
@@ -3062,7 +3076,7 @@ function updateGlyph(c, t, seqP, introT, gate, pointerOn) {
       ease = Math.max(ease, 0.4);
     }
 
-    ease = ease * (2 - ease);   // compound over SIM_STRIDE = 2
+    if (SIM_COMPOUND) ease = ease * (2 - ease);   // compound over the stride
     cur[i3] += (tx - cur[i3]) * ease;
     cur[i3 + 1] += (ty - cur[i3 + 1]) * ease;
     cur[i3 + 2] += (tz - cur[i3 + 2]) * ease;
@@ -3177,7 +3191,7 @@ function updateHand(c, wv, held, t, seqP, gate, pointerOn, easeAll) {
       } else ease = Math.max(ease, POINTER.returnRelax);
     }
 
-    ease = ease * (2 - ease);   // compound over SIM_STRIDE = 2
+    if (SIM_COMPOUND) ease = ease * (2 - ease);   // compound over the stride
     if (hidden) {
       curScale[i] = 0;
       cur[i3] += (tx - cur[i3]) * ease;
