@@ -1012,8 +1012,27 @@ const DPR_CAP = IS_MOBILE
     : clamp(window.devicePixelRatio || 1, 0.75, 1.5);
 const SHADOWS = !IS_MOBILE;
 const SHADOW_SIZE = 2048;
-const FRAME_BUDGET = IS_MOBILE ? 33.3 : IS_TABLET ? 22.2 : 14;
+/* This gate only ever *limits* the rate — it cannot make a slow device faster.
+   Mobile sat at 33.3ms, so a phone capable of 60fps was being held to 30 and
+   read as juddery against a natively-scrolling page. With the simulation cost
+   halved there is headroom, so let every tier run to 60 and let devices that
+   cannot keep up fall back on their own. */
+const FRAME_BUDGET = 15;
 const USE_POINTER = !IS_MOBILE;
+
+/* The hand and glyph clouds are 50,076 and 32,000 points, and every point was
+   re-simulated on the CPU every frame. Measured on a fast desktop: 28ms in the
+   hand loop alone at the wave act — 25fps before the GPU does anything. A bare
+   loop over 50k points costs 10ms on its own, so the fix is to touch fewer
+   points per frame, not to make the maths cheaper (a sin lookup table was
+   measured at only 1.7x on the trig, which is a small part of the cost).
+
+   Each point is an exponential relaxation toward a target, so updating half of
+   them per frame is safe: compound the ease over the stride and the point lands
+   exactly where it would have on its turn, holding for one frame in between.
+   For stride 2 the compound of e is e*(2-e) — no pow() in the inner loop. */
+const SIM_STRIDE = 2;
+let simPhase = 0;
 
 const GLYPH_COUNT = Math.max(8000, Math.round(GLYPH.count * PSCALE));
 const HAND_DENSITY = Math.max(4, Math.round(HAND.density * PSCALE));
@@ -2967,7 +2986,7 @@ function updateGlyph(c, t, seqP, introT, gate, pointerOn) {
   const px = pointerWorld.x, py = pointerWorld.y, pz = pointerWorld.z;
   const sx = 0, sy = 12, sz = 50;
 
-  for (let i = 0; i < count; i++) {
+  for (let i = simPhase; i < count; i += SIM_STRIDE) {
     const i3 = i * 3;
     const ph = stagger[i] * TAU;
     let tx = rest[i3] + Math.sin(t * IDLE.speed + ph) * IDLE.amplitude;
@@ -3043,6 +3062,7 @@ function updateGlyph(c, t, seqP, introT, gate, pointerOn) {
       ease = Math.max(ease, 0.4);
     }
 
+    ease = ease * (2 - ease);   // compound over SIM_STRIDE = 2
     cur[i3] += (tx - cur[i3]) * ease;
     cur[i3 + 1] += (ty - cur[i3 + 1]) * ease;
     cur[i3 + 2] += (tz - cur[i3 + 2]) * ease;
@@ -3067,7 +3087,7 @@ function updateHand(c, wv, held, t, seqP, gate, pointerOn, easeAll) {
   const px = pointerWorld.x, py = pointerWorld.y, pz = pointerWorld.z;
   const scanning = scan < 0.9999;
 
-  for (let i = 0; i < count; i++) {
+  for (let i = simPhase; i < count; i += SIM_STRIDE) {
     const i3 = i * 3;
     const ph = stagger[i] * TAU;
     let tx = rest[i3] + Math.sin(t * IDLE.speed + ph) * IDLE.amplitude;
@@ -3157,6 +3177,7 @@ function updateHand(c, wv, held, t, seqP, gate, pointerOn, easeAll) {
       } else ease = Math.max(ease, POINTER.returnRelax);
     }
 
+    ease = ease * (2 - ease);   // compound over SIM_STRIDE = 2
     if (hidden) {
       curScale[i] = 0;
       cur[i3] += (tx - cur[i3]) * ease;
@@ -3412,6 +3433,7 @@ function frame(now) {
   const dtMs = now - last;
   if (dtMs < FRAME_BUDGET) return;
   last = now;
+  simPhase = (simPhase + 1) % SIM_STRIDE;
   const dt = Math.min(0.05, dtMs / 1000);
   elapsed += dt;
   stepSprings(dt);
@@ -3492,6 +3514,19 @@ function frame(now) {
   const treeSet = setIndex;
   const wS = SETS[waveSet], tS = SETS[treeSet];
 
+  /* The wipe mix has to be known before the subsystems run, not just at render
+     time. lineC spans [-uTilt/2, 1 + uTilt/2], so once uWipe passes that the
+     wave side contributes no pixels at all — yet the 50k-point hand was still
+     being simulated into a render target nobody sees, at 14-18ms a frame. */
+  const w = range(p, SEQ.wipeRange[0], SEQ.wipeRange[1]);
+  let uWipe;
+  if (inTail) {
+    uWipe = loopOut > 0 ? 1.3 - loopOut * 1.6 : 10;
+  } else if (p < SEQ.treeStart) uWipe = -10;
+  else if (p >= SEQ.wipeRange[1]) uWipe = 10;
+  else uWipe = -0.3 + w * 1.6;
+  const waveShown = uWipe < 1 + SEQ.wipeTilt * 0.5 + 0.01;
+
   /* ---- glyph ---- */
   const glyphActive = spWave < 0.54;
   for (let k = 0; k < 2; k++) SETS[k].glyph.mesh.visible = k === waveSet && glyphActive;
@@ -3521,7 +3556,7 @@ function frame(now) {
   /* ---- hand / arm ---- */
   {
     const waveAmt = range(spWave, WAVE.transformRange[0], WAVE.transformRange[1]);
-    const visible = spWave > 0.38;
+    const visible = spWave > 0.38 && waveShown;
     for (let k = 0; k < 2; k++) {
       const h = SETS[k].hand;
       if (h) h.mesh.visible = k === waveSet && visible;
@@ -3534,6 +3569,17 @@ function frame(now) {
         const gate = Math.max(handGate, waveGate);
         const focus = waveGate > handGate ? wS.wave.focus : HAND.center;
         const on = gate > 0.001 ? projectPointer(focus, camera) : false;
+        /* Coming back from a skipped stretch the cloud holds a stale pose, so
+           snap both stride phases rather than let it ease in from the pose it
+           had when the wipe covered it. */
+        if (wS.hand._stale) {
+          const keep = simPhase;
+          for (simPhase = 0; simPhase < SIM_STRIDE; simPhase++) {
+            updateHand(wS.hand, wS.wave, wS.held, t, spWave, gate, on, 1);
+          }
+          simPhase = keep;
+          wS.hand._stale = false;
+        }
         updateHand(wS.hand, wS.wave, wS.held, t, spWave, gate, on);
         const handSpin = smoother(range(spWave, 0.42, 0.57)) * TAU;
         const handHold = range(spWave, 0.44, 0.52) * (1 - range(spWave, WAVE.transformRange[0] - 0.06, WAVE.transformRange[0]));
@@ -3544,6 +3590,8 @@ function frame(now) {
           Math.sin(t * 0.19 + 2) * LIFE.hand.bob * handHold
         );
         if (SHADOWS) wS.hand.mesh.castShadow = false;
+      } else {
+        wS.hand._stale = true;
       }
     }
   }
@@ -3575,21 +3623,17 @@ function frame(now) {
     }
   }
 
-  /* ---- render ---- */
-  const w = range(p, SEQ.wipeRange[0], SEQ.wipeRange[1]);
-  let uWipe;
-  if (inTail) {
-    // hold with the tree owning the frame, then run the wipe backwards: the tree
-    // is swept away and the hero scene — already rendered into rtWave — appears.
-    // At loopOut = 1, uWipe = -0.3 leaves 100% rtWave, identical to p = 0.
-    uWipe = loopOut > 0 ? 1.3 - loopOut * 1.6 : 10;
-  } else if (p < SEQ.treeStart) uWipe = -10;
-  else if (p >= SEQ.wipeRange[1]) uWipe = 10;
-  else uWipe = -0.3 + w * 1.6;
-
+  /* ---- render ----
+     uWipe is computed above, before the subsystems, so they can skip work the
+     wipe would discard. In the tail the tree holds the frame and then the wipe
+     runs backwards: the tree is swept away and the hero scene — already in
+     rtWave — appears. At loopOut = 1, uWipe = -0.3 leaves 100% rtWave,
+     identical to p = 0. */
   waveGroup.visible = true; treeGroup.visible = false;
-  renderer.setRenderTarget(rtWave);
-  renderer.render(scene, camera);
+  if (waveShown) {
+    renderer.setRenderTarget(rtWave);
+    renderer.render(scene, camera);
+  }
   if (inTail || p >= SEQ.treeStart - 0.02) {
     waveGroup.visible = false; treeGroup.visible = true;
     renderer.setRenderTarget(rtTree);
@@ -3612,6 +3656,7 @@ function frame(now) {
   updateFlares(p, spWave, uWipe);
   updateActs(p, p >= SEQ.treeStart ? w : 0, uWipe, handedOff);
 }
+
 
 /* ==================================================================== */
 /*  BOOT                                                                 */
