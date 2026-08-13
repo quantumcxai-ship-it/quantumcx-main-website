@@ -225,8 +225,12 @@ body.menu-open #menu{opacity:1;visibility:visible}
   font-size:1.5rem;font-weight:200;text-transform:uppercase;letter-spacing:0.2em;
   opacity:0;transform:translateY(24px);
 }
-#menuClose{position:fixed;top:0.75rem;right:1.25rem;z-index:260;background:none;border:0;cursor:pointer;font-size:1.5rem;line-height:1;opacity:0}
-body.menu-open #menuClose{opacity:1}
+/* opacity:0 alone left this invisible button live at the top-right of every
+   page, silently eating taps there — including the chat panel's own close
+   button, which sits in the same corner. It must be inert while the menu is
+   shut, not merely transparent. */
+#menuClose{position:fixed;top:0.75rem;right:1.25rem;z-index:260;background:none;border:0;cursor:pointer;font-size:1.5rem;line-height:1;opacity:0;pointer-events:none}
+body.menu-open #menuClose{opacity:1;pointer-events:auto}
 
 /* The page's one h1. It lives outside the acts because those animate their
    opacity, and it is clipped rather than display:none — hiding it that way
@@ -602,8 +606,11 @@ body.menu-open #menuClose{opacity:1}
 #chatLauncher.tucked{opacity:0;pointer-events:none;transform:translateY(0.5rem)}
 body.chat-open #chatLauncher{opacity:0;pointer-events:none}
 
+/* Above #header, which is z-index 200. On a phone this panel is full-screen,
+   and the header sat over its top bar — covering the close button, so a visitor
+   who opened the chat by accident had no way out. */
 #chatPanel{
-  position:fixed;right:1.875rem;bottom:1.875rem;z-index:81;
+  position:fixed;right:1.875rem;bottom:1.875rem;z-index:210;
   width:23rem;max-width:calc(100vw - 2.5rem);
   height:32rem;max-height:calc(100vh - 3.75rem);
   display:none;flex-direction:column;overflow:hidden;
@@ -625,11 +632,16 @@ body.chat-open #chatPanel{display:flex}
 #chatPanel .who b{font-weight:400;font-size:0.9375rem}
 #chatPanel .who span{font-size:0.75rem;color:var(--overlay-strong);display:flex;align-items:center;gap:0.375rem}
 #chatPanel .who i{width:0.4rem;height:0.4rem;border-radius:999px;background:var(--overlay-accent);display:inline-block}
+/* 2.75rem square: a 23x25px glyph was under the 44px minimum tap target, which
+   is the difference between "close it" and "trapped in the chat" on a phone. */
 #chatClose{
-  margin-left:auto;background:none;border:0;cursor:pointer;color:inherit;
-  font-size:1.5rem;line-height:1;padding:0 0.25rem;opacity:.7;
+  margin-left:auto;flex:0 0 auto;
+  width:2.75rem;height:2.75rem;border-radius:999px;
+  display:grid;place-items:center;
+  background:none;border:0;cursor:pointer;color:inherit;
+  font-size:1.5rem;line-height:1;padding:0;opacity:.75;
 }
-#chatClose:hover{opacity:1}
+#chatClose:hover,#chatClose:focus-visible{opacity:1;background:rgba(255,255,255,0.1)}
 
 #chatLog{
   flex:1 1 auto;overflow-y:auto;overscroll-behavior:contain;
@@ -678,8 +690,14 @@ body.chat-open #chatPanel{display:flex}
   #chatPanel{
     right:0;bottom:0;left:0;top:0;
     width:auto;max-width:none;height:auto;max-height:none;border-radius:0;border:0;
-    background:rgba(16,21,26,0.94);
+    background:rgba(16,21,26,0.97);
+    /* Clear the notch and the home indicator, or the close button lands under
+       the status bar and the input under the gesture bar. */
+    padding-top:env(safe-area-inset-top,0px);
+    padding-bottom:env(safe-area-inset-bottom,0px);
   }
+  /* Give the close button its own separation from the title on a small screen */
+  #chatPanel .head{padding:0.625rem 0.625rem 0.625rem 1rem}
 }
 </style>
 </head>
