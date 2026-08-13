@@ -9,12 +9,28 @@
 //
 // Secrets (set these yourself, never paste them into chat):
 //   supabase secrets set OPENROUTER_API_KEY="sk-or-v1-..."
-//   supabase secrets set OPENROUTER_MODEL="deepseek/deepseek-chat-v3-0324:free"   (optional)
+//   supabase secrets set OPENROUTER_MODEL="model-a:free,model-b:free"   (optional)
 //
-// The model is a secret rather than a constant on purpose: OpenRouter's free
-// model line-up changes often, and swapping it should not need a redeploy.
+// OPENROUTER_MODEL is a comma-separated FALLBACK CHAIN, tried in order. Free
+// models are not a stable resource: one went paid under us with a 404 reading
+// "This model is unavailable for free", and another answered 429 "temporarily
+// rate-limited upstream" in the same minute. A single model id means the chat
+// dies silently the day that happens, so we walk the list instead. It is a
+// secret rather than a constant so the chain can change without a redeploy.
 
-const DEFAULT_MODEL = "deepseek/deepseek-chat-v3-0324:free";
+// Ordered by measured latency on a realistic prompt, not by size. The 120b
+// answered well but took 26s, which nobody waits for on a website; the 30b
+// nano answered as usefully in 1.1s. Big model last, as a safety net.
+const DEFAULT_MODELS = [
+  "nvidia/nemotron-3-nano-30b-a3b:free",
+  "openai/gpt-oss-20b:free",
+  "google/gemma-4-26b-a4b-it:free",
+  "nvidia/nemotron-3-super-120b-a12b:free",
+];
+
+// Per-attempt cap. A model that is merely slow should cost us one step down the
+// chain, not a visitor staring at typing dots.
+const ATTEMPT_MS = 12_000;
 
 const ALLOWED = ["quantumcx.net", "www.quantumcx.net", "localhost:8123", "127.0.0.1:8123"];
 
@@ -140,47 +156,74 @@ Deno.serve(async (req) => {
     return json({ error: "Nothing to reply to." }, 400, origin);
   }
 
-  const model = Deno.env.get("OPENROUTER_MODEL") || DEFAULT_MODEL;
+  const chain = (Deno.env.get("OPENROUTER_MODEL") || "")
+    .split(",").map((s) => s.trim()).filter(Boolean);
+  const models = chain.length ? chain : DEFAULT_MODELS;
 
-  let r: Response;
-  try {
-    r = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "authorization": `Bearer ${key}`,
-        "content-type": "application/json",
-        // OpenRouter uses these for attribution on the free tier.
-        "HTTP-Referer": "https://www.quantumcx.net",
-        "X-Title": "QuantumCX",
-      },
-      body: JSON.stringify({
-        model,
-        messages: [{ role: "system", content: SYSTEM }, ...history],
-        max_tokens: 400,
-        temperature: 0.6,
-      }),
-    });
-  } catch (e) {
-    console.error("openrouter fetch failed", e);
-    return json({ error: "Couldn't reach the assistant. Please try again." }, 502, origin);
+  const payload = {
+    messages: [{ role: "system", content: SYSTEM }, ...history],
+    // Several free models are reasoning models, and their reasoning tokens are
+    // charged against max_tokens before a single visible word is produced. At
+    // 400 that truncated a real answer to "I don" — the reasoning had eaten the
+    // budget. Give it room, and ask for the shallowest reasoning the model
+    // supports (ignored by models that have none).
+    max_tokens: 900,
+    reasoning: { effort: "low" },
+    temperature: 0.6,
+  };
+
+  let lastStatus = 0;
+  for (const model of models) {
+    let r: Response;
+    try {
+      r = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "authorization": `Bearer ${key}`,
+          "content-type": "application/json",
+          // OpenRouter uses these for attribution on the free tier.
+          "HTTP-Referer": "https://www.quantumcx.net",
+          "X-Title": "QuantumCX",
+        },
+        body: JSON.stringify({ model, ...payload }),
+        signal: AbortSignal.timeout(ATTEMPT_MS),
+      });
+    } catch (e) {
+      // Includes the timeout above — treat a stall exactly like a failure.
+      console.error("openrouter fetch failed", model, e?.name ?? e);
+      lastStatus = 0;
+      continue;                       // blip or stall — next model
+    }
+
+    if (!r.ok) {
+      lastStatus = r.status;
+      const detail = await r.text().catch(() => "");
+      console.error("openrouter error", model, r.status, detail.slice(0, 300));
+      continue;                       // 404 gone paid, 429 rate-limited, 5xx — next
+    }
+
+    const data = await r.json().catch(() => null);
+    const choice = data?.choices?.[0];
+    const reply = typeof choice?.message?.content === "string" ? choice.message.content.trim() : "";
+
+    if (!reply) {
+      console.error("openrouter returned no content", model, choice?.finish_reason);
+      continue;
+    }
+    // A stub cut off mid-sentence is worse than trying the next model. A long
+    // answer that merely clipped its last line is still worth showing.
+    if (choice?.finish_reason === "length" && reply.length < 200) {
+      console.error("truncated reply, trying next model", model, JSON.stringify(reply).slice(0, 80));
+      continue;
+    }
+
+    return json({ reply, model }, 200, origin);
   }
 
-  if (!r.ok) {
-    const detail = await r.text().catch(() => "");
-    console.error("openrouter error", r.status, detail.slice(0, 500));
-    // 429 from the free tier is the common one and deserves its own wording.
-    const msg = r.status === 429
+  console.error("every model in the chain failed", models.join(","));
+  return json({
+    error: lastStatus === 429
       ? "Busy right now — try again in a minute."
-      : "Couldn't reach the assistant. Please try again.";
-    return json({ error: msg }, 502, origin);
-  }
-
-  const data = await r.json().catch(() => null);
-  const reply = data?.choices?.[0]?.message?.content;
-  if (typeof reply !== "string" || !reply.trim()) {
-    console.error("openrouter returned no content", JSON.stringify(data)?.slice(0, 500));
-    return json({ error: "Couldn't reach the assistant. Please try again." }, 502, origin);
-  }
-
-  return json({ reply: reply.trim() }, 200, origin);
+      : "Couldn't reach the assistant. Please try again.",
+  }, 502, origin);
 });
