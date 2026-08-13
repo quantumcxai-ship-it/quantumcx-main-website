@@ -595,7 +595,9 @@ body.menu-open #menuClose{opacity:1;pointer-events:auto}
   font:inherit;font-size:0.9375rem;font-weight:300;color:var(--overlay-ink);
   background:var(--overlay-glass);border:1px solid var(--overlay-edge);
   -webkit-backdrop-filter:blur(var(--blur-overlay-form));backdrop-filter:blur(var(--blur-overlay-form));
-  cursor:pointer;transition:opacity .25s ease,transform .25s ease,bottom .25s ease;
+  /* No transition on `bottom`. It is repositioned from a timer, and animating
+     it turns any momentary disagreement into a visible bounce. */
+  cursor:pointer;transition:opacity .25s ease,transform .25s ease;
 }
 #chatLauncher:hover{transform:translateY(-2px)}
 /* The mark is a dark tile, so it keeps its own background rather than sitting
@@ -4015,6 +4017,8 @@ function attachHand(st, cloud, waveTarget, sparse) {
      Polled a few times a second rather than hooked into the render loop: this
      is DOM measurement, and it has no business running per frame. */
   var GAP = 12;
+  var lift = 0, tucked = false;   // what is currently applied
+  var pending = "";               // last reading, not yet acted on
 
   function reallyVisible(el) {
     if (el.checkVisibility) {
@@ -4027,12 +4031,14 @@ function attachHand(st, cloud, waveTarget, sparse) {
   setInterval(function () {
     if (document.body.classList.contains("chat-open")) return;
 
-    /* Measure at rest. Judging the collision from the already-lifted element
-       makes the answer depend on its own output: lifted, it no longer overlaps,
-       so it drops, so it overlaps again. Zero the lift, measure, then write the
-       result — both writes land in one task, so nothing paints in between. */
-    launcher.style.setProperty("--lift", "0px");
+    /* Judge the collision from where the launcher would sit unlifted. Do NOT
+       zero --lift to measure it: getBoundingClientRect forces a layout flush,
+       so the element really does drop to the bottom for an instant before the
+       lift is written back — which is a visible bounce on every tick. Add the
+       applied lift back arithmetically instead, and never touch the DOM before
+       reading it. */
     var r = launcher.getBoundingClientRect();
+    var restTop = r.top + lift, restBottom = r.bottom + lift;
 
     var needed = 0;
     var controls = document.querySelectorAll(".act .interactive");
@@ -4041,8 +4047,8 @@ function attachHand(st, cloud, waveTarget, sparse) {
       if (!reallyVisible(el)) continue;
       var c = el.getBoundingClientRect();
       if (c.width < 4 || c.height < 4) continue;
-      if (r.right < c.left || r.left > c.right || r.bottom < c.top || r.top > c.bottom) continue;
-      var clear = r.bottom - c.top + GAP;
+      if (r.right < c.left || r.left > c.right || restBottom < c.top || restTop > c.bottom) continue;
+      var clear = restBottom - c.top + GAP;
       if (clear > needed) needed = clear;
     }
 
@@ -4051,8 +4057,18 @@ function attachHand(st, cloud, waveTarget, sparse) {
        bar needs 312px of clearance. Hide it there instead; the bar is itself a
        way to get in touch, so nothing is lost. */
     var tuck = needed > window.innerHeight * 0.25;
-    launcher.classList.toggle("tucked", tuck);
-    launcher.style.setProperty("--lift", (tuck ? 0 : Math.round(needed)) + "px");
+    var next = tuck ? 0 : Math.round(needed);
+
+    /* Act copy slides in on reveal, so a control's position is still moving for
+       a few hundred ms. Act only on a reading that has repeated, or the
+       launcher chases the animation up the screen. */
+    var reading = next + "/" + tuck;
+    if (reading !== pending) { pending = reading; return; }
+    if (next === lift && tuck === tucked) return;
+
+    lift = next; tucked = tuck;
+    launcher.classList.toggle("tucked", tucked);
+    launcher.style.setProperty("--lift", lift + "px");
   }, 300);
 })();
 </script>
