@@ -589,10 +589,12 @@ body.menu-open #menuClose{opacity:1}
   cursor:pointer;transition:opacity .25s ease,transform .25s ease;
 }
 #chatLauncher:hover{transform:translateY(-2px)}
+/* The mark is a dark tile, so it keeps its own background rather than sitting
+   on the accent — object-fit guards against a non-square asset being swapped
+   in later. */
 #chatLauncher .av{
   width:1.75rem;height:1.75rem;border-radius:999px;flex:0 0 auto;
-  display:grid;place-items:center;font-size:0.8125rem;
-  background:var(--overlay-accent);color:#04140a;
+  object-fit:cover;display:block;
 }
 /* The film has no scroll of its own to push things out of the way, so the
    launcher is hidden while the contact bar owns the bottom of a phone screen —
@@ -616,8 +618,8 @@ body.chat-open #chatPanel{display:flex}
   padding:0.875rem 1rem;border-bottom:1px solid var(--overlay-line);flex:0 0 auto;
 }
 #chatPanel .head .av{
-  width:2rem;height:2rem;border-radius:999px;display:grid;place-items:center;
-  font-size:0.875rem;background:var(--overlay-accent);color:#04140a;flex:0 0 auto;
+  width:2rem;height:2rem;border-radius:999px;flex:0 0 auto;
+  object-fit:cover;display:block;
 }
 #chatPanel .who{display:flex;flex-direction:column;line-height:1.25;min-width:0}
 #chatPanel .who b{font-weight:400;font-size:0.9375rem}
@@ -938,12 +940,12 @@ body.chat-open #chatPanel{display:flex}
 
 <!-- ============================================================== CHAT -->
 <button id="chatLauncher" type="button" aria-haspopup="dialog" aria-controls="chatPanel" aria-expanded="false">
-  <span class="av" aria-hidden="true">N</span><span>Chat with Noor</span>
+  <img class="av" src="assets/icon-192.png" alt="" width="28" height="28" decoding="async"><span>Chat with Noor</span>
 </button>
 
 <div id="chatPanel" role="dialog" aria-modal="false" aria-labelledby="chatWho" hidden>
   <div class="head">
-    <span class="av" aria-hidden="true">N</span>
+    <img class="av" src="assets/icon-192.png" alt="" width="32" height="32" decoding="async">
     <span class="who">
       <b id="chatWho">Noor</b>
       <span><i aria-hidden="true"></i>QuantumCX</span>
