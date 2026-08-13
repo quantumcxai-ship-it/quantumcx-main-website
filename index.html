@@ -583,14 +583,19 @@ body.menu-open #menuClose{opacity:1;pointer-events:auto}
 /* ==================================================================== */
 /*  CHAT — Noor                                                          */
 /* ==================================================================== */
+/* --lift is written from JS when the launcher would land on a control in the
+   act currently on screen. No fixed corner is safe: the acts fill the viewport
+   edge to edge, and every corner collides with something in at least one of
+   them — the hero CTAs sit in the bottom right, the contact bar owns the
+   bottom, the wave and tree copy own the top right. */
 #chatLauncher{
-  position:fixed;right:1.875rem;bottom:1.875rem;z-index:80;
+  position:fixed;right:1.875rem;bottom:calc(1.875rem + var(--lift, 0px));z-index:80;
   display:flex;align-items:center;gap:0.5rem;
   height:3rem;padding:0 1.125rem 0 0.875rem;border-radius:999px;
   font:inherit;font-size:0.9375rem;font-weight:300;color:var(--overlay-ink);
   background:var(--overlay-glass);border:1px solid var(--overlay-edge);
   -webkit-backdrop-filter:blur(var(--blur-overlay-form));backdrop-filter:blur(var(--blur-overlay-form));
-  cursor:pointer;transition:opacity .25s ease,transform .25s ease;
+  cursor:pointer;transition:opacity .25s ease,transform .25s ease,bottom .25s ease;
 }
 #chatLauncher:hover{transform:translateY(-2px)}
 /* The mark is a dark tile, so it keeps its own background rather than sitting
@@ -683,7 +688,7 @@ body.chat-open #chatPanel{display:flex}
 #chatSend:disabled{opacity:.45;cursor:default}
 
 @media (max-width:767.98px){
-  #chatLauncher{right:1.25rem;bottom:1.25rem;height:2.75rem;font-size:0.875rem}
+  #chatLauncher{right:1.25rem;bottom:calc(1.25rem + var(--lift, 0px));height:2.75rem;font-size:0.875rem}
   /* iOS Safari zooms the whole page when a focused field is under 16px, and on
      a pinned film that zoom has nothing to scroll back from. Hard 16px. */
   #chatInput{font-size:16px}
@@ -4000,17 +4005,55 @@ function attachHand(st, cloud, waveTarget, sparse) {
       });
   });
 
-  /* The film is pinned, so nothing scrolls out of the way: on a phone the
-     contact bar owns the bottom of the screen during one act and the launcher
-     would sit on its submit button. Poll the act's opacity a few times a second
-     — cheap, and off the render loop entirely. */
-  var treeB = document.getElementById("actTreeB");
-  if (treeB && window.matchMedia("(max-width:767.98px)").matches) {
-    setInterval(function () {
-      var showing = parseFloat(getComputedStyle(treeB).opacity) > 0.05;
-      launcher.classList.toggle("tucked", showing);
-    }, 300);
+  /* The film is pinned, so nothing ever scrolls out of the way, and the acts
+     fill the viewport edge to edge — there is no corner that is free in every
+     act. The launcher therefore moves itself: each tick it checks whether it
+     covers a control in whichever act is on screen, and lifts just clear of it.
+     If clearing would throw it too far up the screen (the phone contact bar is
+     most of the viewport), it hides instead.
+
+     Polled a few times a second rather than hooked into the render loop: this
+     is DOM measurement, and it has no business running per frame. */
+  var GAP = 12;
+
+  function reallyVisible(el) {
+    if (el.checkVisibility) {
+      return el.checkVisibility({ opacityProperty: true, visibilityProperty: true });
+    }
+    var act = el.closest(".act");
+    return !act || parseFloat(getComputedStyle(act).opacity) > 0.05;
   }
+
+  setInterval(function () {
+    if (document.body.classList.contains("chat-open")) return;
+
+    /* Measure at rest. Judging the collision from the already-lifted element
+       makes the answer depend on its own output: lifted, it no longer overlaps,
+       so it drops, so it overlaps again. Zero the lift, measure, then write the
+       result — both writes land in one task, so nothing paints in between. */
+    launcher.style.setProperty("--lift", "0px");
+    var r = launcher.getBoundingClientRect();
+
+    var needed = 0;
+    var controls = document.querySelectorAll(".act .interactive");
+    for (var i = 0; i < controls.length; i++) {
+      var el = controls[i];
+      if (!reallyVisible(el)) continue;
+      var c = el.getBoundingClientRect();
+      if (c.width < 4 || c.height < 4) continue;
+      if (r.right < c.left || r.left > c.right || r.bottom < c.top || r.top > c.bottom) continue;
+      var clear = r.bottom - c.top + GAP;
+      if (clear > needed) needed = clear;
+    }
+
+    /* Beyond a quarter of the screen the launcher is no longer "just above the
+       button", it is stranded in the middle of the scene — the phone contact
+       bar needs 312px of clearance. Hide it there instead; the bar is itself a
+       way to get in touch, so nothing is lost. */
+    var tuck = needed > window.innerHeight * 0.25;
+    launcher.classList.toggle("tucked", tuck);
+    launcher.style.setProperty("--lift", (tuck ? 0 : Math.round(needed)) + "px");
+  }, 300);
 })();
 </script>
 </body>
