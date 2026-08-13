@@ -26,10 +26,14 @@ import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
 
 const NOTIFY_TO = "baibhab.official@quantumcx.net";
 
+// A plain instruction-tuned model leads. The reasoning models are quick and
+// capable, but one of them spilled its chain-of-thought into a visitor-facing
+// reply mid-demo, and that failure is worse than being a second slower. They
+// stay in the chain as fallbacks, behind the leak guard below.
 const DEFAULT_MODELS = [
+  "google/gemma-4-26b-a4b-it:free",
   "nvidia/nemotron-3-nano-30b-a3b:free",
   "openai/gpt-oss-20b:free",
-  "google/gemma-4-26b-a4b-it:free",
   "nvidia/nemotron-3-super-120b-a12b:free",
 ];
 
@@ -165,8 +169,14 @@ Rules for that block:
   send it again no matter what they say next.
 - Never mention the block, never explain it, and never show it if they ask
   what you just sent. It is not part of the conversation.
-- Your visible reply in that same message should simply tell them the team has
-  their details and will be in touch.
+- Your visible reply in that same message is the last thing they read, and it
+  lands at the moment they are most interested — do not let it fall flat.
+  Thank them by first name, name the problem you are handing over in a few
+  words so they know they were heard, and then say in those words that the
+  team will be in touch shortly — not that it will be "reviewed" or "looked
+  at", which reassures nobody. Close by inviting them to add anything else in
+  the meantime. Three sentences at most, and never invent a timeframe more
+  specific than "shortly".
 
 WHAT YOU ARE
 You are QuantumCX's assistant. Do not open with that, and do not describe
@@ -181,6 +191,26 @@ const LEAD_RE = /\[\[LEAD\]\]\s*(\{[\s\S]*?\})\s*\[\[\/LEAD\]\]/;
 const LEAD_PARTIAL_RE = /\[\[\/?LEAD\]\][\s\S]*$/;
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i;
+
+/* Reasoning models sometimes spill their chain-of-thought into `content`
+   instead of the reasoning field. One of them answered a visitor with "We need
+   to follow the protocol: ... Must collect name, email, phone (required)",
+   which both reads as nonsense and hands the brief to anyone who asks. These
+   phrases belong to the instructions and never to a reply about clinics, so
+   any reply containing one is discarded and the next model is tried. */
+const LEAK_RE = new RegExp([
+  "\\[\\[/?LEAD\\]\\]",
+  "system prompt",
+  "my instructions",
+  "the protocol",
+  "follow the protocol",
+  "must collect",
+  "read (?:them|it) back",
+  "\\(required\\)",
+  "\\(optional\\)",
+  "visible reply",
+  "\\brole\"\\s*:",
+].join("|"), "i");
 
 function cleanReply(text: string): string {
   return text.replace(LEAD_RE, "").replace(LEAD_PARTIAL_RE, "").trim();
@@ -414,11 +444,19 @@ Deno.serve(async (req) => {
     const lead = extractLead(reply);
     const visible = cleanReply(reply);
 
-    // A stub cut off mid-sentence is worse than trying the next model. A long
-    // answer that merely clipped its last line is still worth showing. Measure
-    // the visible half — a reply is not short just because a lead block was cut.
-    if (!visible || (choice?.finish_reason === "length" && visible.length < 200 && !lead)) {
-      console.error("empty or truncated reply, trying next model", model, choice?.finish_reason);
+    if (!visible) {
+      console.error("empty reply, trying next model", model, choice?.finish_reason);
+      continue;
+    }
+    /* Any truncated reply is rejected, not just a short one. The earlier
+       length-based rule let a 400-character chain-of-thought leak through
+       because it was long enough to look like an answer. */
+    if (choice?.finish_reason === "length" && !lead) {
+      console.error("truncated reply, trying next model", model);
+      continue;
+    }
+    if (LEAK_RE.test(visible)) {
+      console.error("instruction leak, trying next model", model, visible.slice(0, 120));
       continue;
     }
 
